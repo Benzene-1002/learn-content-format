@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    // 移送元(portfolio)と同じ厳格さに揃える。移送で挙動が変わらないことを
+    // 優先するので、noUncheckedIndexedAccess はここでは入れない。
+    "strict": true,
+    // 利用者の一方(変換ツール)は素の Node。ビルドの責任はこちらが持つので、
+    // 解決も出力も Node の ESM に合わせる(相対 import は `.js` 付きで書く)。
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}
