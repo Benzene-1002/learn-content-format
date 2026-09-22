@@ -1,0 +1,9 @@
+{
+  "id": "fe",
+  "name": "基本情報技術者試験",
+  "realExam": {
+    "questionCount": 2,
+    "durationMinutes": 90,
+    "passingScorePercent": 60
+  }
+}

@@ -5,9 +5,9 @@
     "noEmit": false,
     "outDir": "dist",
     "rootDir": "src",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    // 配るのは dist と fixtures だけ(package.json の files)。src を配らない以上、
+    // 行き先の無い .map は置かない。
+    "declaration": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]

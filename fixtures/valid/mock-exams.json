@@ -1,0 +1,28 @@
+{
+  "mockExams": [
+    {
+      "id": "mock-01",
+      "name": "模試 第1回",
+      "questions": [
+        {
+          "id": "m-0001",
+          "type": "choice",
+          "source": "ch03-02-01",
+          "difficulty": 3,
+          "prompt": "第1正規形でないものはどれか。",
+          "options": ["繰り返し項目を持つ表", "繰り返し項目を持たない表"],
+          "answer": [0]
+        },
+        {
+          "id": "m-0002",
+          "type": "numeric",
+          "source": "ch03-03-01",
+          "difficulty": 3,
+          "prompt": "5 行の表から全行を取り出したときの行数はいくつか。",
+          "answer": 5,
+          "tolerance": { "type": "absolute", "value": 0 }
+        }
+      ]
+    }
+  ]
+}
