@@ -423,10 +423,17 @@ describe('validateContentPackage: 整合段(§6)', () => {
   });
 
   it('存在しない区分を指す模試を拒否し、問題数は照らさない(§6 の条件 5・6)', () => {
+    // main の問数を模試(2 問)と違う値にしておく。誤って別の区分と照らせば不一致が出る。
     const issues = issuesOf(
-      withJson('mock-exams.json', (file) => {
-        // @ts-expect-error fixture を壊すための書き換え
-        file.mockExams[0].part = 'b';
+      withJsons({
+        'exam.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.parts[0].questionCount = 60;
+        },
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = 'b';
+        },
       }),
     );
     // 照らす相手の区分が無いので、問題数の不一致は出さない(出しても直し方が分からない)。
