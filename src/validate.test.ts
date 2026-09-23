@@ -7,20 +7,23 @@ import { type ExtractedEntry, type ExtractedPackage, validateContentPackage } fr
 
 // fixtures はリポジトリ直下に置く(`src/` の下ではない)。利用側が
 // `node_modules/learn-content-format/fixtures/valid` を実ファイルとして読むため。
+// 区分 1 つの `valid` を壊して拒否を確かめる。区分 2 つの `valid-two-parts` は、
+// 正常に取り込めることだけを確かめる(区分をまたぐ拒否は `valid` を書き換えて作る)。
 const FIXTURE_DIR = join(import.meta.dirname, '..', 'fixtures', 'valid');
+const TWO_PARTS_FIXTURE_DIR = join(import.meta.dirname, '..', 'fixtures', 'valid-two-parts');
 
 /** 正常な fixture を、ZIP を展開した結果の形で読み込む。 */
-function loadValidPackage(): ExtractedEntry[] {
+function loadValidPackage(dir = FIXTURE_DIR): ExtractedEntry[] {
   const entries: ExtractedEntry[] = [];
-  for (const name of readdirSync(FIXTURE_DIR).sort()) {
+  for (const name of readdirSync(dir).sort()) {
     if (name === 'assets') continue;
-    entries.push({ name, bytes: new Uint8Array(readFileSync(join(FIXTURE_DIR, name))) });
+    entries.push({ name, bytes: new Uint8Array(readFileSync(join(dir, name))) });
   }
   entries.push({ name: 'assets/', bytes: new Uint8Array() });
-  for (const name of readdirSync(join(FIXTURE_DIR, 'assets')).sort()) {
+  for (const name of readdirSync(join(dir, 'assets')).sort()) {
     entries.push({
       name: `assets/${name}`,
-      bytes: new Uint8Array(readFileSync(join(FIXTURE_DIR, 'assets', name))),
+      bytes: new Uint8Array(readFileSync(join(dir, 'assets', name))),
     });
   }
   return entries;
@@ -78,15 +81,44 @@ function issuesOf(input: ExtractedPackage) {
 const codesOf = (input: ExtractedPackage) => issuesOf(input).map((issue) => issue.code);
 
 describe('validateContentPackage: 正常なパッケージ', () => {
-  it('取り込める', () => {
+  it('取り込める(区分 1 つ)', () => {
     const result = validateContentPackage({ entries: loadValidPackage() });
     if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
 
     expect(result.package.exam.id).toBe('fe');
+    expect(result.package.exam.parts.map((part) => part.id)).toEqual(['main']);
+    expect(result.package.mockExams?.map((mock) => mock.part)).toEqual(['main']);
     expect(result.package.textbook.sectionIds).toEqual(['ch03-02', 'ch03-03']);
     expect(result.package.questions).toHaveLength(6);
     expect(result.package.mockExams).toHaveLength(1);
     expect([...result.package.assets.keys()]).toEqual(['fig-0301.png']);
+  });
+
+  it('取り込める(区分 2 つ)', () => {
+    const result = validateContentPackage({ entries: loadValidPackage(TWO_PARTS_FIXTURE_DIR) });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
+
+    // 区分の並び順は表示の順(§2.1)。書かれた順のまま返す。
+    expect(result.package.exam.parts.map((part) => [part.id, part.questionCount])).toEqual([
+      ['a', 2],
+      ['b', 1],
+    ]);
+    // 区分ごとに模試が 1 本ずつあり、問題数はその区分の問数と一致する。
+    expect(
+      result.package.mockExams?.map((mock) => [mock.id, mock.part, mock.questions.length]),
+    ).toEqual([
+      ['mock-a-01', 'a', 2],
+      ['mock-b-01', 'b', 1],
+    ]);
+    // 区分を書いた問題と、書かない(全区分に共通の)問題の両方がある(§4.7)。
+    expect(result.package.questions.map((question) => question.part ?? null)).toEqual([
+      'a',
+      null,
+      'a',
+      null,
+      'b',
+      'b',
+    ]);
   });
 
   it('模試セットは無くてもよい(要件 §6.5)', () => {

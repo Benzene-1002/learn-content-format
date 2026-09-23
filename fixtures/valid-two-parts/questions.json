@@ -1,0 +1,63 @@
+{
+  "questions": [
+    {
+      "id": "q-0001",
+      "type": "choice",
+      "source": "ch03-02-01",
+      "part": "a",
+      "difficulty": 1,
+      "prompt": "第1正規形の条件として正しいものはどれか。",
+      "options": ["繰り返し項目が無い", "部分関数従属が無い", "推移的関数従属が無い", "主キーが無い"],
+      "answer": [0],
+      "explanation": "第1正規形は繰り返し項目を持たない状態をいう。"
+    },
+    {
+      "id": "q-0002",
+      "type": "multi",
+      "source": "ch03-02-01",
+      "difficulty": 2,
+      "prompt": "第1正規形について正しいものをすべて選べ。",
+      "options": ["繰り返し項目が無い", "部分関数従属が無い", "表として表せる"],
+      "answer": [0, 2]
+    },
+    {
+      "id": "q-0003",
+      "type": "choice",
+      "source": "ch03-02-02",
+      "part": "a",
+      "difficulty": 3,
+      "prompt": "第2正規形の条件として正しいものはどれか。",
+      "options": ["部分関数従属が無い", "推移的関数従属が無い", "繰り返し項目が無い"],
+      "answer": [0]
+    },
+    {
+      "id": "q-0004",
+      "type": "flashcard",
+      "source": "ch03-02-02",
+      "difficulty": 1,
+      "prompt": "部分関数従属とは。",
+      "answer": "候補キーの一部にのみ従属すること。"
+    },
+    {
+      "id": "q-0005",
+      "type": "numeric",
+      "source": "ch03-03-01",
+      "part": "b",
+      "difficulty": 2,
+      "prompt": "3 行の表から全行を取り出したとき、結果の行数はいくつか。",
+      "answer": 3,
+      "tolerance": { "type": "absolute", "value": 0 },
+      "unit": "行"
+    },
+    {
+      "id": "q-0006",
+      "type": "choice",
+      "source": "ch03-03-01",
+      "part": "b",
+      "difficulty": 1,
+      "prompt": "表から行を取り出す SQL はどれか。",
+      "options": ["SELECT", "INSERT", "UPDATE", "DELETE"],
+      "answer": [0]
+    }
+  ]
+}
