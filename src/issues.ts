@@ -60,7 +60,8 @@ export type ContentIssueCode =
   | 'consistency.question_id_duplicated'
   | 'consistency.anchor_not_found'
   | 'consistency.image_not_found'
-  | 'consistency.mock_question_count_mismatch';
+  | 'consistency.mock_question_count_mismatch'
+  | 'consistency.part_not_found';
 
 /**
  * 違反 1 件。

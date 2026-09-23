@@ -414,6 +414,29 @@ function checkCrossFile(args: {
 }): void {
   const { textbook, questions, mockExams, exam, assets, issues } = args;
 
+  // 条件 5: 区分の参照が exam.json の parts に実在する。無ければ、どの区分の条件で
+  // 出す・解くかが決まらない。
+  const partsById = new Map(exam.parts.map((part) => [part.id, part]));
+  const checkPartExists = (part: string, file: string, path: string): void => {
+    if (partsById.has(part)) return;
+    issues.add({
+      code: 'consistency.part_not_found',
+      stage: 'consistency',
+      file,
+      path,
+      id: part,
+      message: `区分 "${part}" が exam.json の parts に無い(§6 の条件 5)。parts[].id のどれか(${[...partsById.keys()].map((id) => `"${id}"`).join(' / ')})を書く。`,
+    });
+  };
+  questions.forEach((question, index) => {
+    if (question.part !== undefined) {
+      checkPartExists(question.part, PACKAGE_FILES.questions, `questions[${index}].part`);
+    }
+  });
+  mockExams?.forEach((mock, index) => {
+    checkPartExists(mock.part, PACKAGE_FILES.mockExams, `mockExams[${index}].part`);
+  });
+
   // 問題 ID は questions.json と mock-exams.json を合わせた全体で一意(§7.1)。
   const seenQuestionIds = new Set<string>();
   const allQuestions: { question: Question; file: string; path: string }[] = questions.map(
@@ -465,8 +488,6 @@ function checkCrossFile(args: {
     }
   }
 
-  const partsById = new Map(exam.parts.map((part) => [part.id, part]));
-
   const mockExamIds = new Set<string>();
   mockExams?.forEach((mock, index) => {
     if (mockExamIds.has(mock.id)) {
@@ -482,7 +503,7 @@ function checkCrossFile(args: {
     mockExamIds.add(mock.id);
 
     // 模試は本番形式で通しで解くもの(要件 §6.1 / §6.3)。問数はその区分の本番と一致させる
-    // (§6 の条件 6)。
+    // (§6 の条件 6)。区分が無い模試は条件 5 で報告済みで、照らす相手が無いので飛ばす。
     const part = partsById.get(mock.part);
     if (part !== undefined && mock.questions.length !== part.questionCount) {
       issues.add({
@@ -497,6 +518,7 @@ function checkCrossFile(args: {
   });
 
   // 条件 2: 同じ根拠を持つ問題が 2 問以上(日々の問題集の中で数える)。
+  // 区分ごとには数えない(§4.7)。類題は区分をまたいで出してよいため。
   const perSource = new Map<string, number>();
   for (const question of questions) {
     perSource.set(question.source, (perSource.get(question.source) ?? 0) + 1);
@@ -513,7 +535,7 @@ function checkCrossFile(args: {
     }
   }
 
-  // 条件 3: すべての節に、到達判定へ算入できる問題が 1 問以上。
+  // 条件 3: すべての節に、到達判定へ算入できる問題が 1 問以上。区分ごとには数えない(§4.7)。
   const gradablePerSection = new Map<string, number>();
   for (const sectionId of textbook.sectionIds) gradablePerSection.set(sectionId, 0);
   for (const question of questions) {

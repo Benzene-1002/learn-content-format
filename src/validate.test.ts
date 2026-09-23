@@ -59,6 +59,12 @@ function withJsons(
   return { entries };
 }
 
+/** 問数の違う 2 区分。a は 60 問、b は fixture の模試と同じ 2 問。 */
+const TWO_PARTS = [
+  { id: 'a', name: '科目A', questionCount: 60, durationMinutes: 90, passingScorePercent: 60 },
+  { id: 'b', name: '科目B', questionCount: 2, durationMinutes: 100, passingScorePercent: 60 },
+];
+
 function withoutFile(name: string): ExtractedPackage {
   return { entries: loadValidPackage().filter((entry) => entry.name !== name) };
 }
@@ -370,14 +376,7 @@ describe('validateContentPackage: 整合段(§6)', () => {
     // 区分 a は 60 問、b は fixture の模試と同じ 2 問。照らす相手で結果が変わる。
     const withParts = (mockPart: string) =>
       withJsons({
-        'exam.json': (file) => {
-          Object.assign(file, {
-            parts: [
-              { id: 'a', name: '科目A', questionCount: 60, durationMinutes: 90, passingScorePercent: 60 },
-              { id: 'b', name: '科目B', questionCount: 2, durationMinutes: 100, passingScorePercent: 60 },
-            ],
-          });
-        },
+        'exam.json': (file) => Object.assign(file, { parts: TWO_PARTS }),
         'mock-exams.json': (file) => {
           // @ts-expect-error fixture を壊すための書き換え
           file.mockExams[0].part = mockPart;
@@ -391,6 +390,108 @@ describe('validateContentPackage: 整合段(§6)', () => {
     expect(mismatch?.id).toBe('mock-01');
     expect(mismatch?.message).toContain('"a"');
     expect(mismatch?.message).toContain('60');
+  });
+
+  it('存在しない区分を指す問題を拒否する(§6 の条件 5)', () => {
+    const issues = issuesOf(
+      withJson('questions.json', (file) => {
+        // @ts-expect-error fixture を壊すための書き換え
+        file.questions[2].part = 'b';
+      }),
+    );
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'consistency.part_not_found',
+        stage: 'consistency',
+        file: 'questions.json',
+        path: 'questions[2].part',
+        id: 'b',
+      }),
+    ]);
+    expect(issues[0].message).toContain('"main"');
+  });
+
+  it('存在する区分を指す問題は通す(§4.7)', () => {
+    expect(
+      validateContentPackage(
+        withJson('questions.json', (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[2].part = 'main';
+        }),
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('存在しない区分を指す模試を拒否し、問題数は照らさない(§6 の条件 5・6)', () => {
+    const issues = issuesOf(
+      withJson('mock-exams.json', (file) => {
+        // @ts-expect-error fixture を壊すための書き換え
+        file.mockExams[0].part = 'b';
+      }),
+    );
+    // 照らす相手の区分が無いので、問題数の不一致は出さない(出しても直し方が分からない)。
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'consistency.part_not_found',
+        file: 'mock-exams.json',
+        path: 'mockExams[0].part',
+        id: 'b',
+      }),
+    ]);
+  });
+
+  it('区分 ID の大文字小文字の違いを同じ区分と見なさない', () => {
+    // ID の規則で大文字は書けないので、スキーマ段で落ちる。整合段まで進まない。
+    const issues = issuesOf(
+      withJson('mock-exams.json', (file) => {
+        // @ts-expect-error fixture を壊すための書き換え
+        file.mockExams[0].part = 'MAIN';
+      }),
+    );
+    expect(issues.map((issue) => [issue.code, issue.path])).toEqual([
+      ['schema.invalid', 'mockExams[0].part'],
+    ]);
+  });
+
+  it('条件 2 は区分ごとに数えない(§4.7)。同じ根拠の 2 問が別の区分でも通す', () => {
+    // q-0001 と q-0002 は根拠 ch03-02-01 の 2 問。区分を分けても類題は区分をまたいで出せる。
+    const result = validateContentPackage(
+      withJsons({
+        'exam.json': (file) => Object.assign(file, { parts: TWO_PARTS }),
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = 'b';
+        },
+        'questions.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[0].part = 'a';
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[1].part = 'b';
+        },
+      }),
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
+  });
+
+  it('条件 3 は区分ごとに数えない(§4.7)。節の算入できる問題が 1 区分にしか無くても通す', () => {
+    // 節 ch03-03 の問題(q-0005 / q-0006)をすべて区分 a にする。区分 b から見るとこの節の
+    // 問題は 0 問だが、到達判定は区分に関わらず 1 つなので拒否しない。
+    const result = validateContentPackage(
+      withJsons({
+        'exam.json': (file) => Object.assign(file, { parts: TWO_PARTS }),
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = 'b';
+        },
+        'questions.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[4].part = 'a';
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[5].part = 'a';
+        },
+      }),
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
   });
 
   it('存在しない画像の参照と、参照されない画像を拒否する', () => {
