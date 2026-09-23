@@ -1,6 +1,6 @@
 # learn-content-format
 
-**教材パッケージ形式 v1.0 の検証関数。** 学習アプリと変換ツールが同じ判定を使うための共有パッケージ。
+**教材パッケージ形式 v2.0 の検証関数。** 学習アプリと変換ツールが同じ判定を使うための共有パッケージ。
 
 ```
 learn-content-format   ← このリポジトリ(Zod スキーマ + 検証関数)
@@ -25,7 +25,7 @@ learn-content-format   ← このリポジトリ(Zod スキーマ + 検証関数
 タグで固定して参照する。ブランチ名では参照しない。
 
 ```bash
-npm install 'git+https://github.com/Benzene-1002/learn-content-format.git#v1.0.0'
+npm install 'git+https://github.com/Benzene-1002/learn-content-format.git#v2.0.0'
 ```
 
 `prepare` で `dist` を作るので、利用側にビルドの設定は要らない。
@@ -86,7 +86,7 @@ if (result.ok) {
 | `validate` | `validateContentPackage` / `ValidationResult` / `ExtractedPackage` / `ExtractedEntry` / `ValidatedPackage` |
 | `issues` | `ContentIssue` / `ContentIssueCode` / `ContentIssueStage` / `contentIssue` |
 | `limits` | `CONTENT_LIMITS` / `ID_PATTERN` / `ID_MAX_LENGTH` / `isValidId` / `classifyEntryName` / `IMAGE_MIME` / `PACKAGE_FILES` / `REQUIRED_PACKAGE_FILES` / `ASSETS_DIR` / `CONTROL_CHARACTERS` / `isValidAssetFileName` / `imageKindFromFileName` / `imageKindFromBytes` |
-| `schema` | `manifestSchema` / `examSchema` / `questionSchema` / `mockQuestionSchema` / `questionsFileSchema` / `mockExamsFileSchema` / `Question` / `MockQuestion` / `Manifest` / `Exam` / `isGradable` / `SUPPORTED_FORMAT_VERSION` / `isSupportedFormatVersion` / `toContentIssues` |
+| `schema` | `manifestSchema` / `examSchema` / `Part` / `questionSchema` / `mockQuestionSchema` / `questionsFileSchema` / `mockExamsFileSchema` / `Question` / `MockQuestion` / `Manifest` / `Exam` / `isGradable` / `SUPPORTED_FORMAT_VERSION` / `isSupportedFormatVersion` / `toContentIssues` |
 | `markdown` | `scanMarkdown` / `classifyUrl` / `MarkdownScan` |
 | `textbook` | `parseTextbook` / `Textbook` / `TextbookHeading` |
 | `textbook-split` | `splitTextbook` / `TextbookNode` |
@@ -96,11 +96,32 @@ if (result.ok) {
 
 ### fixtures
 
-正常系の教材パッケージ 1 式を、実ファイルとして同梱する。
+正常系の教材パッケージを 2 式、実ファイルとして同梱する。どちらも 1 つのディレクトリが
+そのまま 1 つのパッケージで、中にあるものをすべてエントリとして読めばよい。
 
-```
-node_modules/learn-content-format/fixtures/valid/
-```
+| 置き場所 | 中身 |
+| --- | --- |
+| `node_modules/learn-content-format/fixtures/valid/` | 区分 1 つ(ID `main`・名前「本試験」)。模試 1 本 |
+| `node_modules/learn-content-format/fixtures/valid-two-parts/` | 区分 2 つ(`a` 科目A・`b` 科目B)。区分ごとに模試 1 本。`part` を書いた問題と書かない問題の両方を含む |
+
+## v1.0.0 からの変更(v2.0.0)
+
+形式 v2.0(`content-format.md` §9、ADR 0012)に追随した。**メジャーが上がったので、
+利用側は取り込み・模試・型を合わせて直す必要がある。**
+
+- **受理する版はメジャー 2 だけ。** `formatVersion: "1.x"` は `syntax.format_version_unsupported`
+  で拒否する。v1.x を v2 に読み替えて受理する経路は無い
+- `exam.json` の `realExam` が無くなり、`parts`(区分。1〜10 個)が必須になった。
+  型では `Exam['realExam']` が消え、`Exam['parts']`(要素は `Part`)が入った。
+  `realExam` を書いても未知のフィールドとして落ち、`parts` が無ければ拒否する
+- `mockExams[].part` が必須になった。各模試の問題数は、その区分の `questionCount` と照らす
+- `questions[].part` を書けるようになった(任意・単数。書かなければ全区分に共通)。
+  模試の問題に `part` を書くと拒否する
+- 違反コード `consistency.part_not_found` を足した(区分の参照が `parts` に無い。§6 の条件 5)。
+  `parts` の欠落・空・11 個以上・区分 ID の重複、`mockExams[].part` の欠落、模試の問題の `part` は、
+  いずれも `schema.invalid` として場所つきで返す
+- `CONTENT_LIMITS.partCount`(10)を足した
+- fixtures: `valid` を v2.0(区分 1 つ)に書き換え、`valid-two-parts` を足した
 
 ---
 
@@ -113,4 +134,4 @@ npm run check   # typecheck → test → build
 ```
 
 - 要件と移行の制約: [`docs/requirements.md`](docs/requirements.md)
-- タグは形式のバージョンに追随する。形式 v1.0 に対応する実装は `v1.0.x`
+- タグは形式のバージョンに追随する。形式 v2.0 に対応する実装は `v2.0.x`。受理するメジャーは 1 つだけ

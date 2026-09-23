@@ -7,7 +7,7 @@
 
 ## 1. これは何か
 
-**教材パッケージ形式 v1.0 の検証関数を、2 つのプロダクトから使うための共有パッケージ。**
+**教材パッケージ形式(現行は v2.0)の検証関数を、2 つのプロダクトから使うための共有パッケージ。**
 
 ```
 learn-content-format   ← このリポジトリ(Zod スキーマ + 検証関数)
@@ -49,7 +49,7 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 | `schema.ts` | Zod スキーマ(manifest / exam / questions / mock-exams) |
 | `markdown.ts` | 教科書 Markdown の記法検査(許可する記法、危険な URL) |
 | `textbook.ts` / `textbook-split.ts` | 見出しの階層と ID、項への分割 |
-| `validate.ts` | ファイルをまたぐ条件(§6 の 4 条件) |
+| `validate.ts` | ファイルをまたぐ条件(§6) |
 | `extract.ts` | 展開済みの対応表を受け取る入口 |
 | `issues.ts` | 拒否理由の型(段階とコード) |
 | `fixtures/valid/` | 正常系の教材パッケージ 1 式(図 1 枚を含む) |
@@ -84,10 +84,12 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 
 ## 4. バージョン規則
 
-- **タグは形式のバージョンに追随させる。** 形式 v1.0 に対応する実装は `v1.0.x`
+- **タグは形式のバージョンに追随させる。** 形式 v2.0 に対応する実装は `v2.0.x`(v1.0 は `v1.0.x`)
+- **受理する形式のメジャーは 1 つだけ。** 古いメジャーを読み替えて受理する経路は持たない
+  (`content-format.md` §1.3、ADR 0012 決定 4)
 - 形式が変わらない修正(バグ・内部整理)はパッチを上げる
 - 利用側は**タグで固定**して参照する。ブランチ名で参照しない
-  (`git+https://github.com/Benzene-1002/learn-content-format.git#v1.0.0`)
+  (`git+https://github.com/Benzene-1002/learn-content-format.git#v2.0.0`)
 - `content-format.md` は **portfolio に残る**。このリポジトリは実装だけを持つ。
   仕様を変えるときは **portfolio 側の文書が先**で、こちらが追随する
 

@@ -1,7 +1,7 @@
 {
   "name": "learn-content-format",
-  "version": "1.0.0",
-  "description": "教材パッケージ形式 v1.0 の検証関数(学習アプリと変換ツールの共有パッケージ)",
+  "version": "2.0.0",
+  "description": "教材パッケージ形式 v2.0 の検証関数(学習アプリと変換ツールの共有パッケージ)",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",
