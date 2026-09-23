@@ -55,12 +55,13 @@ export const manifestSchema = z.object({
 export type Manifest = z.infer<typeof manifestSchema>;
 
 /** この実装が受理する形式の版(§1.3)。 */
-export const SUPPORTED_FORMAT_VERSION = { major: 1, minor: 0 } as const;
+export const SUPPORTED_FORMAT_VERSION = { major: 2, minor: 0 } as const;
 
 /**
  * `formatVersion` を受理してよいか(§1.3)。
  *
  * メジャーが違えば拒否。マイナーが上でも**受理する**(知らないフィールドは無視する)。
+ * 古いメジャー(v1.x)も拒否する。読み替えて受理する経路は持たない(ADR 0012 決定 4)。
  */
 export function isSupportedFormatVersion(formatVersion: string): boolean {
   const match = /^(\d+)\.(\d+)$/.exec(formatVersion);
@@ -70,16 +71,41 @@ export function isSupportedFormatVersion(formatVersion: string): boolean {
 
 // --- exam.json (§2) ---
 
+/** 区分(§2.1)。本番で別々に時間を区切って解く単位。 */
+const partSchema = z.object({
+  id: idSchema,
+  name: boundedText(1, 100),
+  questionCount: z.number().int().min(1).max(1000),
+  durationMinutes: z.number().int().min(1).max(600),
+  passingScorePercent: z.number().int().min(0).max(100),
+});
+
+export type Part = z.infer<typeof partSchema>;
+
 export const examSchema = z.object({
   id: idSchema,
   name: boundedText(1, 200),
   // 模試セットの有無に関わらず必須(要件 §5.1)。これは本番の条件であって、
-  // 模試セットの持ち物ではない。
-  realExam: z.object({
-    questionCount: z.number().int().min(1).max(1000),
-    durationMinutes: z.number().int().min(1).max(600),
-    passingScorePercent: z.number().int().min(0).max(100),
-  }),
+  // 模試セットの持ち物ではない。区分が 1 つの試験も要素 1 個で書く(§2.1)。
+  // v1.0 の `realExam` は未知のフィールドとして落ちる(§9)。
+  parts: z
+    .array(partSchema)
+    .min(1, '区分が 1 つも無い(§2)。区分が 1 つの試験も要素 1 個の parts を書く')
+    .max(CONTENT_LIMITS.partCount, `区分は ${CONTENT_LIMITS.partCount} 個まで(§2)`)
+    .superRefine((parts, ctx) => {
+      // 模試と問題が区分を ID で指すので、parts の中で一意でなければならない(§7.1)。
+      const seen = new Set<string>();
+      for (const [index, part] of parts.entries()) {
+        if (seen.has(part.id)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [index, 'id'],
+            message: `区分 ID "${part.id}" が重複している(§7.1)。区分 ID は parts の中で一意にする`,
+          });
+        }
+        seen.add(part.id);
+      }
+    }),
 });
 
 export type Exam = z.infer<typeof examSchema>;
@@ -89,6 +115,8 @@ export type Exam = z.infer<typeof examSchema>;
 const questionCommon = {
   id: idSchema,
   source: idSchema,
+  // 区分(§4.7)。書かなければ全区分に共通。実在するかは整合段で見る(§6 の条件 5)。
+  part: idSchema.optional(),
   // 宣言難易度。1〜5 の順序尺度で、間隔に意味は無い(ADR 0008、要件 §5.4)。
   difficulty: z.number().int().min(1).max(5),
   prompt: boundedText(1, 4000),
@@ -166,9 +194,26 @@ export const questionSchema = z
   .discriminatedUnion('type', [choiceSchema, multiSchema, numericSchema, flashcardSchema])
   .superRefine(checkQuestion);
 
+/**
+ * 模試の問題には `part` を書かせない(§5)。区分は模試の `part` で決まる。
+ *
+ * 未知のフィールドとして黙って落とすのではなく、書いてあれば拒否する。区分の表し方を
+ * 1 つにし、「模試は a なのに問題は b」という食い違いを定義しなくて済むようにするため
+ * (ADR 0012 決定 2)。
+ */
+const mockQuestionPart = {
+  part: z
+    .never({ message: '模試の問題に part は書かない(§5)。区分は模試の part で決まる' })
+    .optional(),
+};
+
 /** 模試の問題(§5)。フラッシュカードは使えない。 */
 export const mockQuestionSchema = z
-  .discriminatedUnion('type', [choiceSchema, multiSchema, numericSchema])
+  .discriminatedUnion('type', [
+    choiceSchema.extend(mockQuestionPart),
+    multiSchema.extend(mockQuestionPart),
+    numericSchema.extend(mockQuestionPart),
+  ])
   .superRefine(checkQuestion);
 
 export type Question = z.infer<typeof questionSchema>;
@@ -199,6 +244,8 @@ export const mockExamsFileSchema = z
         z.object({
           id: idSchema,
           name: boundedText(1, 200),
+          // どの区分の模試か(§5)。区分が 1 つの試験でも書く。暗黙の既定値を作らない。
+          part: idSchema,
           questions: z
             .array(mockQuestionSchema)
             .min(1, '模試に問題が 1 問も無い(§5)')

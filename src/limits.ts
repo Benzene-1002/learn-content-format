@@ -36,6 +36,8 @@ export const CONTENT_LIMITS = {
   mockExamCount: 50,
   /** 模試 1 つあたりの問題数。 */
   mockExamQuestionCount: 1_000,
+  /** 試験の区分の数(§2)。 */
+  partCount: 10,
 } as const;
 
 /** パッケージ直下に置いてよいファイル(§1.1)。 */

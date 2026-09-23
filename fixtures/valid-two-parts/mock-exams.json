@@ -1,9 +1,9 @@
 {
   "mockExams": [
     {
-      "id": "mock-01",
-      "name": "模試 第1回",
-      "part": "main",
+      "id": "mock-a-01",
+      "name": "科目A 第1回",
+      "part": "a",
       "questions": [
         {
           "id": "m-0001",
@@ -22,6 +22,22 @@
           "prompt": "5 行の表から全行を取り出したときの行数はいくつか。",
           "answer": 5,
           "tolerance": { "type": "absolute", "value": 0 }
+        }
+      ]
+    },
+    {
+      "id": "mock-b-01",
+      "name": "科目B 第1回",
+      "part": "b",
+      "questions": [
+        {
+          "id": "m-0003",
+          "type": "choice",
+          "source": "ch03-03-01",
+          "difficulty": 2,
+          "prompt": "表から特定の列だけを取り出す SQL の句はどれか。",
+          "options": ["SELECT 句", "WHERE 句", "ORDER BY 句"],
+          "answer": [0]
         }
       ]
     }

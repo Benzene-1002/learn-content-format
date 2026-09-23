@@ -7,20 +7,23 @@ import { type ExtractedEntry, type ExtractedPackage, validateContentPackage } fr
 
 // fixtures はリポジトリ直下に置く(`src/` の下ではない)。利用側が
 // `node_modules/learn-content-format/fixtures/valid` を実ファイルとして読むため。
+// 区分 1 つの `valid` を壊して拒否を確かめる。区分 2 つの `valid-two-parts` は、
+// 正常に取り込めることだけを確かめる(区分をまたぐ拒否は `valid` を書き換えて作る)。
 const FIXTURE_DIR = join(import.meta.dirname, '..', 'fixtures', 'valid');
+const TWO_PARTS_FIXTURE_DIR = join(import.meta.dirname, '..', 'fixtures', 'valid-two-parts');
 
 /** 正常な fixture を、ZIP を展開した結果の形で読み込む。 */
-function loadValidPackage(): ExtractedEntry[] {
+function loadValidPackage(dir = FIXTURE_DIR): ExtractedEntry[] {
   const entries: ExtractedEntry[] = [];
-  for (const name of readdirSync(FIXTURE_DIR).sort()) {
+  for (const name of readdirSync(dir).sort()) {
     if (name === 'assets') continue;
-    entries.push({ name, bytes: new Uint8Array(readFileSync(join(FIXTURE_DIR, name))) });
+    entries.push({ name, bytes: new Uint8Array(readFileSync(join(dir, name))) });
   }
   entries.push({ name: 'assets/', bytes: new Uint8Array() });
-  for (const name of readdirSync(join(FIXTURE_DIR, 'assets')).sort()) {
+  for (const name of readdirSync(join(dir, 'assets')).sort()) {
     entries.push({
       name: `assets/${name}`,
-      bytes: new Uint8Array(readFileSync(join(FIXTURE_DIR, 'assets', name))),
+      bytes: new Uint8Array(readFileSync(join(dir, 'assets', name))),
     });
   }
   return entries;
@@ -43,6 +46,28 @@ function withJson(name: string, mutate: (value: Record<string, never>) => void):
   return withFile(name, JSON.stringify(original, null, 2));
 }
 
+/** 正常な fixture の JSON を複数まとめて書き換える。ファイルをまたぐ条件を試すため。 */
+function withJsons(
+  mutations: Record<string, (value: Record<string, never>) => void>,
+): ExtractedPackage {
+  const replaced = new Map(
+    Object.entries(mutations).map(([name, mutate]) => {
+      const original = JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf-8'));
+      mutate(original);
+      return [name, encode(JSON.stringify(original, null, 2))];
+    }),
+  );
+  const entries = loadValidPackage().filter((entry) => !replaced.has(entry.name));
+  for (const [name, bytes] of replaced) entries.push({ name, bytes });
+  return { entries };
+}
+
+/** 問数の違う 2 区分。a は 60 問、b は fixture の模試と同じ 2 問。 */
+const TWO_PARTS = [
+  { id: 'a', name: '科目A', questionCount: 60, durationMinutes: 90, passingScorePercent: 60 },
+  { id: 'b', name: '科目B', questionCount: 2, durationMinutes: 100, passingScorePercent: 60 },
+];
+
 function withoutFile(name: string): ExtractedPackage {
   return { entries: loadValidPackage().filter((entry) => entry.name !== name) };
 }
@@ -56,15 +81,44 @@ function issuesOf(input: ExtractedPackage) {
 const codesOf = (input: ExtractedPackage) => issuesOf(input).map((issue) => issue.code);
 
 describe('validateContentPackage: 正常なパッケージ', () => {
-  it('取り込める', () => {
+  it('取り込める(区分 1 つ)', () => {
     const result = validateContentPackage({ entries: loadValidPackage() });
     if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
 
     expect(result.package.exam.id).toBe('fe');
+    expect(result.package.exam.parts.map((part) => part.id)).toEqual(['main']);
+    expect(result.package.mockExams?.map((mock) => mock.part)).toEqual(['main']);
     expect(result.package.textbook.sectionIds).toEqual(['ch03-02', 'ch03-03']);
     expect(result.package.questions).toHaveLength(6);
     expect(result.package.mockExams).toHaveLength(1);
     expect([...result.package.assets.keys()]).toEqual(['fig-0301.png']);
+  });
+
+  it('取り込める(区分 2 つ)', () => {
+    const result = validateContentPackage({ entries: loadValidPackage(TWO_PARTS_FIXTURE_DIR) });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
+
+    // 区分の並び順は表示の順(§2.1)。書かれた順のまま返す。
+    expect(result.package.exam.parts.map((part) => [part.id, part.questionCount])).toEqual([
+      ['a', 2],
+      ['b', 1],
+    ]);
+    // 区分ごとに模試が 1 本ずつあり、問題数はその区分の問数と一致する。
+    expect(
+      result.package.mockExams?.map((mock) => [mock.id, mock.part, mock.questions.length]),
+    ).toEqual([
+      ['mock-a-01', 'a', 2],
+      ['mock-b-01', 'b', 1],
+    ]);
+    // 区分を書いた問題と、書かない(全区分に共通の)問題の両方がある(§4.7)。
+    expect(result.package.questions.map((question) => question.part ?? null)).toEqual([
+      'a',
+      null,
+      'a',
+      null,
+      'b',
+      'b',
+    ]);
   });
 
   it('模試セットは無くてもよい(要件 §6.5)', () => {
@@ -131,13 +185,21 @@ describe('validateContentPackage: 構文段(§1.3 / §3)', () => {
 
   it('メジャーの違う形式を拒否する(§1.3)', () => {
     expect(
-      codesOf(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '2.0' }))),
+      codesOf(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '3.0' }))),
     ).toContain('syntax.format_version_unsupported');
+  });
+
+  it('v1.x のパッケージを読み替えずに拒否する(§1.3、ADR 0012 決定 4)', () => {
+    const issues = issuesOf(
+      withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '1.0' })),
+    );
+    expect(issues.map((issue) => issue.code)).toEqual(['syntax.format_version_unsupported']);
+    expect(issues[0].message).toContain('メジャー 2');
   });
 
   it('マイナーが上の形式は受理する(§1.3)', () => {
     expect(
-      validateContentPackage(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '1.9' })))
+      validateContentPackage(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '2.9' })))
         .ok,
     ).toBe(true);
   });
@@ -328,17 +390,147 @@ describe('validateContentPackage: 整合段(§6)', () => {
     ).toContain('consistency.question_id_duplicated');
   });
 
-  it('模試の問題数が本番の問数と違えば拒否する(§5)', () => {
+  it('模試の問題数が、その区分の本番の問数と違えば拒否する(§5 / §6 の条件 6)', () => {
     const issues = issuesOf(
       withJson('exam.json', (file) => {
         // @ts-expect-error fixture を壊すための書き換え
-        file.realExam.questionCount = 60;
+        file.parts[0].questionCount = 60;
       }),
     );
     const mismatch = issues.find(
       (issue) => issue.code === 'consistency.mock_question_count_mismatch',
     );
     expect(mismatch?.id).toBe('mock-01');
+    expect(mismatch?.message).toContain('"main"');
+  });
+
+  it('模試の問題数は、その模試の part が指す区分と照らす(先頭の区分ではない)', () => {
+    // 区分 a は 60 問、b は fixture の模試と同じ 2 問。照らす相手で結果が変わる。
+    const withParts = (mockPart: string) =>
+      withJsons({
+        'exam.json': (file) => Object.assign(file, { parts: TWO_PARTS }),
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = mockPart;
+        },
+      });
+
+    expect(validateContentPackage(withParts('b')).ok).toBe(true);
+    const mismatch = issuesOf(withParts('a')).find(
+      (issue) => issue.code === 'consistency.mock_question_count_mismatch',
+    );
+    expect(mismatch?.id).toBe('mock-01');
+    expect(mismatch?.message).toContain('"a"');
+    expect(mismatch?.message).toContain('60');
+  });
+
+  it('存在しない区分を指す問題を拒否する(§6 の条件 5)', () => {
+    const issues = issuesOf(
+      withJson('questions.json', (file) => {
+        // @ts-expect-error fixture を壊すための書き換え
+        file.questions[2].part = 'b';
+      }),
+    );
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'consistency.part_not_found',
+        stage: 'consistency',
+        file: 'questions.json',
+        path: 'questions[2].part',
+        id: 'b',
+      }),
+    ]);
+    expect(issues[0].message).toContain('"main"');
+  });
+
+  it('存在する区分を指す問題は通す(§4.7)', () => {
+    expect(
+      validateContentPackage(
+        withJson('questions.json', (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[2].part = 'main';
+        }),
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('存在しない区分を指す模試を拒否し、問題数は照らさない(§6 の条件 5・6)', () => {
+    // main の問数を模試(2 問)と違う値にしておく。誤って別の区分と照らせば不一致が出る。
+    const issues = issuesOf(
+      withJsons({
+        'exam.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.parts[0].questionCount = 60;
+        },
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = 'b';
+        },
+      }),
+    );
+    // 照らす相手の区分が無いので、問題数の不一致は出さない(出しても直し方が分からない)。
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'consistency.part_not_found',
+        file: 'mock-exams.json',
+        path: 'mockExams[0].part',
+        id: 'b',
+      }),
+    ]);
+  });
+
+  it('区分 ID の大文字小文字の違いを同じ区分と見なさない', () => {
+    // ID の規則で大文字は書けないので、スキーマ段で落ちる。整合段まで進まない。
+    const issues = issuesOf(
+      withJson('mock-exams.json', (file) => {
+        // @ts-expect-error fixture を壊すための書き換え
+        file.mockExams[0].part = 'MAIN';
+      }),
+    );
+    expect(issues.map((issue) => [issue.code, issue.path])).toEqual([
+      ['schema.invalid', 'mockExams[0].part'],
+    ]);
+  });
+
+  it('条件 2 は区分ごとに数えない(§4.7)。同じ根拠の 2 問が別の区分でも通す', () => {
+    // q-0001 と q-0002 は根拠 ch03-02-01 の 2 問。区分を分けても類題は区分をまたいで出せる。
+    const result = validateContentPackage(
+      withJsons({
+        'exam.json': (file) => Object.assign(file, { parts: TWO_PARTS }),
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = 'b';
+        },
+        'questions.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[0].part = 'a';
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[1].part = 'b';
+        },
+      }),
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
+  });
+
+  it('条件 3 は区分ごとに数えない(§4.7)。節の算入できる問題が 1 区分にしか無くても通す', () => {
+    // 節 ch03-03 の問題(q-0005 / q-0006)をすべて区分 a にする。区分 b から見るとこの節の
+    // 問題は 0 問だが、到達判定は区分に関わらず 1 つなので拒否しない。
+    const result = validateContentPackage(
+      withJsons({
+        'exam.json': (file) => Object.assign(file, { parts: TWO_PARTS }),
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = 'b';
+        },
+        'questions.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[4].part = 'a';
+          // @ts-expect-error fixture を壊すための書き換え
+          file.questions[5].part = 'a';
+        },
+      }),
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues, null, 2));
   });
 
   it('存在しない画像の参照と、参照されない画像を拒否する', () => {

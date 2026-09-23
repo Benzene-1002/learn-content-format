@@ -7,7 +7,7 @@
 
 ## 1. これは何か
 
-**教材パッケージ形式 v1.0 の検証関数を、2 つのプロダクトから使うための共有パッケージ。**
+**教材パッケージ形式(現行は v2.0)の検証関数を、2 つのプロダクトから使うための共有パッケージ。**
 
 ```
 learn-content-format   ← このリポジトリ(Zod スキーマ + 検証関数)
@@ -49,17 +49,20 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 | `schema.ts` | Zod スキーマ(manifest / exam / questions / mock-exams) |
 | `markdown.ts` | 教科書 Markdown の記法検査(許可する記法、危険な URL) |
 | `textbook.ts` / `textbook-split.ts` | 見出しの階層と ID、項への分割 |
-| `validate.ts` | ファイルをまたぐ条件(§6 の 4 条件) |
-| `extract.ts` | 展開済みの対応表を受け取る入口 |
+| `validate.ts` | ファイルをまたぐ条件(§6)と、展開済みの対応表を受け取る検証の入口 |
 | `issues.ts` | 拒否理由の型(段階とコード) |
-| `fixtures/valid/` | 正常系の教材パッケージ 1 式(図 1 枚を含む) |
+| `fixtures/valid/` / `fixtures/valid-two-parts/` | 正常系の教材パッケージ(区分 1 つ / 区分 2 つ。図 1 枚を含む) |
+
+`extract.ts`(ZIP を開く段)は移さず、portfolio の `src/features/learn/import/extract.ts` に残した
+(下の「移すときの制約」)。
 
 ### 移すときの制約
 
 - **純粋関数のまま保つ。** DB・ファイル I/O・ネットワークを持ち込まない。入力は
   「ファイル名 → 中身」の対応表(`Map<string, Uint8Array>` 相当)
-- **`server-only` を外す。** `issues.ts` が import しているが、これは Next.js 専用の目印で、
-  変換ツール(Next.js ではない)では読み込めない。**この 1 行を外すだけでよい**
+- **`server-only` に依存しない。** Next.js 専用の目印で、変換ツール(Next.js ではない)では
+  読み込めない。移送元は p20 の時点で「純粋関数の世界に閉じるので付けない」と決めており、
+  どこも import していなかったので、外す作業は要らなかった(ADR 0011)
 - 依存は `zod` だけ。バージョンは portfolio と揃える(固定版。`^` を付けない)
 - ZIP を開く処理は**含めない**。ZIP の目録や重複エントリの判定は展開する側の責任
   (`content-format.md` §0.1 の「展開段」)
@@ -70,8 +73,7 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 
 現在 portfolio の内部で export されているものを、そのままパッケージの公開 API にする。
 **入口は `extractContentPackage(archive)` ではなく、展開済みの対応表を受け取る関数**にする
-(ZIP を開く責任を持たないため。現状の `extract.ts` の入口がこの形になっているか確認し、
-なっていなければ合わせる)。
+(ZIP を開く責任を持たないため)。`validate.ts` の `validateContentPackage` がこの入口。
 
 最低限、次が外から使えること。
 
@@ -84,10 +86,12 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 
 ## 4. バージョン規則
 
-- **タグは形式のバージョンに追随させる。** 形式 v1.0 に対応する実装は `v1.0.x`
+- **タグは形式のバージョンに追随させる。** 形式 v2.0 に対応する実装は `v2.0.x`(v1.0 は `v1.0.x`)
+- **受理する形式のメジャーは 1 つだけ。** 古いメジャーを読み替えて受理する経路は持たない
+  (`content-format.md` §1.3、ADR 0012 決定 4)
 - 形式が変わらない修正(バグ・内部整理)はパッチを上げる
 - 利用側は**タグで固定**して参照する。ブランチ名で参照しない
-  (`git+https://github.com/Benzene-1002/learn-content-format.git#v1.0.0`)
+  (`git+https://github.com/Benzene-1002/learn-content-format.git#v2.0.0`)
 - `content-format.md` は **portfolio に残る**。このリポジトリは実装だけを持つ。
   仕様を変えるときは **portfolio 側の文書が先**で、こちらが追随する
 
