@@ -131,13 +131,21 @@ describe('validateContentPackage: 構文段(§1.3 / §3)', () => {
 
   it('メジャーの違う形式を拒否する(§1.3)', () => {
     expect(
-      codesOf(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '2.0' }))),
+      codesOf(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '3.0' }))),
     ).toContain('syntax.format_version_unsupported');
+  });
+
+  it('v1.x のパッケージを読み替えずに拒否する(§1.3、ADR 0012 決定 4)', () => {
+    const issues = issuesOf(
+      withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '1.0' })),
+    );
+    expect(issues.map((issue) => issue.code)).toEqual(['syntax.format_version_unsupported']);
+    expect(issues[0].message).toContain('メジャー 2');
   });
 
   it('マイナーが上の形式は受理する(§1.3)', () => {
     expect(
-      validateContentPackage(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '1.9' })))
+      validateContentPackage(withJson('manifest.json', (m) => Object.assign(m, { formatVersion: '2.9' })))
         .ok,
     ).toBe(true);
   });
@@ -328,17 +336,18 @@ describe('validateContentPackage: 整合段(§6)', () => {
     ).toContain('consistency.question_id_duplicated');
   });
 
-  it('模試の問題数が本番の問数と違えば拒否する(§5)', () => {
+  it('模試の問題数が、その区分の本番の問数と違えば拒否する(§5 / §6 の条件 6)', () => {
     const issues = issuesOf(
       withJson('exam.json', (file) => {
         // @ts-expect-error fixture を壊すための書き換え
-        file.realExam.questionCount = 60;
+        file.parts[0].questionCount = 60;
       }),
     );
     const mismatch = issues.find(
       (issue) => issue.code === 'consistency.mock_question_count_mismatch',
     );
     expect(mismatch?.id).toBe('mock-01');
+    expect(mismatch?.message).toContain('"main"');
   });
 
   it('存在しない画像の参照と、参照されない画像を拒否する', () => {

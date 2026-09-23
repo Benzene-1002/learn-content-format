@@ -3,6 +3,7 @@
     {
       "id": "mock-01",
       "name": "模試 第1回",
+      "part": "main",
       "questions": [
         {
           "id": "m-0001",

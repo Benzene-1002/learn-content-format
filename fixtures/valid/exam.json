@@ -1,9 +1,13 @@
 {
   "id": "fe",
   "name": "基本情報技術者試験",
-  "realExam": {
-    "questionCount": 2,
-    "durationMinutes": 90,
-    "passingScorePercent": 60
-  }
+  "parts": [
+    {
+      "id": "main",
+      "name": "本試験",
+      "questionCount": 2,
+      "durationMinutes": 90,
+      "passingScorePercent": 60
+    }
+  ]
 }

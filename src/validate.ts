@@ -465,6 +465,8 @@ function checkCrossFile(args: {
     }
   }
 
+  const partsById = new Map(exam.parts.map((part) => [part.id, part]));
+
   const mockExamIds = new Set<string>();
   mockExams?.forEach((mock, index) => {
     if (mockExamIds.has(mock.id)) {
@@ -479,15 +481,17 @@ function checkCrossFile(args: {
     }
     mockExamIds.add(mock.id);
 
-    // 模試は本番形式で通しで解くもの(要件 §6.1 / §6.3)。問数は本番と一致させる。
-    if (mock.questions.length !== exam.realExam.questionCount) {
+    // 模試は本番形式で通しで解くもの(要件 §6.1 / §6.3)。問数はその区分の本番と一致させる
+    // (§6 の条件 6)。
+    const part = partsById.get(mock.part);
+    if (part !== undefined && mock.questions.length !== part.questionCount) {
       issues.add({
         code: 'consistency.mock_question_count_mismatch',
         stage: 'consistency',
         file: PACKAGE_FILES.mockExams,
         path: `mockExams[${index}].questions`,
         id: mock.id,
-        message: `模試の問題数は本番の問数(${exam.realExam.questionCount})と一致させる(§5)。${mock.questions.length} 問ある。`,
+        message: `模試の問題数は、区分 "${part.id}"(${part.name})の本番の問数(${part.questionCount})と一致させる(§5)。${mock.questions.length} 問ある。`,
       });
     }
   });
