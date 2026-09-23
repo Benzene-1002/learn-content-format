@@ -49,10 +49,12 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 | `schema.ts` | Zod スキーマ(manifest / exam / questions / mock-exams) |
 | `markdown.ts` | 教科書 Markdown の記法検査(許可する記法、危険な URL) |
 | `textbook.ts` / `textbook-split.ts` | 見出しの階層と ID、項への分割 |
-| `validate.ts` | ファイルをまたぐ条件(§6) |
-| `extract.ts` | 展開済みの対応表を受け取る入口 |
+| `validate.ts` | ファイルをまたぐ条件(§6)と、展開済みの対応表を受け取る検証の入口 |
 | `issues.ts` | 拒否理由の型(段階とコード) |
-| `fixtures/valid/` | 正常系の教材パッケージ 1 式(図 1 枚を含む) |
+| `fixtures/valid/` / `fixtures/valid-two-parts/` | 正常系の教材パッケージ(区分 1 つ / 区分 2 つ。図 1 枚を含む) |
+
+`extract.ts`(ZIP を開く段)は移さず、portfolio の `src/features/learn/import/extract.ts` に残した
+(下の「移すときの制約」)。
 
 ### 移すときの制約
 
@@ -70,8 +72,7 @@ npm レジストリへは公開しない(`package.json` の `private: true` で�
 
 現在 portfolio の内部で export されているものを、そのままパッケージの公開 API にする。
 **入口は `extractContentPackage(archive)` ではなく、展開済みの対応表を受け取る関数**にする
-(ZIP を開く責任を持たないため。現状の `extract.ts` の入口がこの形になっているか確認し、
-なっていなければ合わせる)。
+(ZIP を開く責任を持たないため)。`validate.ts` の `validateContentPackage` がこの入口。
 
 最低限、次が外から使えること。
 
