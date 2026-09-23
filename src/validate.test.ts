@@ -43,6 +43,22 @@ function withJson(name: string, mutate: (value: Record<string, never>) => void):
   return withFile(name, JSON.stringify(original, null, 2));
 }
 
+/** 正常な fixture の JSON を複数まとめて書き換える。ファイルをまたぐ条件を試すため。 */
+function withJsons(
+  mutations: Record<string, (value: Record<string, never>) => void>,
+): ExtractedPackage {
+  const replaced = new Map(
+    Object.entries(mutations).map(([name, mutate]) => {
+      const original = JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf-8'));
+      mutate(original);
+      return [name, encode(JSON.stringify(original, null, 2))];
+    }),
+  );
+  const entries = loadValidPackage().filter((entry) => !replaced.has(entry.name));
+  for (const [name, bytes] of replaced) entries.push({ name, bytes });
+  return { entries };
+}
+
 function withoutFile(name: string): ExtractedPackage {
   return { entries: loadValidPackage().filter((entry) => entry.name !== name) };
 }
@@ -348,6 +364,33 @@ describe('validateContentPackage: 整合段(§6)', () => {
     );
     expect(mismatch?.id).toBe('mock-01');
     expect(mismatch?.message).toContain('"main"');
+  });
+
+  it('模試の問題数は、その模試の part が指す区分と照らす(先頭の区分ではない)', () => {
+    // 区分 a は 60 問、b は fixture の模試と同じ 2 問。照らす相手で結果が変わる。
+    const withParts = (mockPart: string) =>
+      withJsons({
+        'exam.json': (file) => {
+          Object.assign(file, {
+            parts: [
+              { id: 'a', name: '科目A', questionCount: 60, durationMinutes: 90, passingScorePercent: 60 },
+              { id: 'b', name: '科目B', questionCount: 2, durationMinutes: 100, passingScorePercent: 60 },
+            ],
+          });
+        },
+        'mock-exams.json': (file) => {
+          // @ts-expect-error fixture を壊すための書き換え
+          file.mockExams[0].part = mockPart;
+        },
+      });
+
+    expect(validateContentPackage(withParts('b')).ok).toBe(true);
+    const mismatch = issuesOf(withParts('a')).find(
+      (issue) => issue.code === 'consistency.mock_question_count_mismatch',
+    );
+    expect(mismatch?.id).toBe('mock-01');
+    expect(mismatch?.message).toContain('"a"');
+    expect(mismatch?.message).toContain('60');
   });
 
   it('存在しない画像の参照と、参照されない画像を拒否する', () => {
